@@ -1,0 +1,1292 @@
+openapi: 3.0.3
+info:
+  title: CleanupOwl Third-Party API (Beta)
+  description: >
+    Beta API for integrating with CleanupOwl's bookkeeping detection and fixing
+    engine. All routes under `/tp/api/`. Breaking changes may occur without a
+    version bump; see release notes.
+  version: beta
+  contact:
+    email: support@cleanupowl.com
+  externalDocs:
+    description: Full HTTP reference
+    url: ./api-reference.md
+
+servers:
+  - url: https://app.cleanupowl.com
+    description: Production
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Scans
+    description: Start, poll, and retrieve scan results
+  - name: Issues
+    description: List bookkeeping issue categories
+  - name: Solvers
+    description: Discover solvers, prepare fixes, and apply them
+  - name: Billing
+    description: Plan and usage information
+  - name: Connections
+    description: QuickBooks company connections
+
+paths:
+  /tp/api/scan/start:
+    post:
+      operationId: startScan
+      summary: Start a new scan
+      description: >
+        Starts an asynchronous scan. Returns `scanId` to poll. Wait at least
+        `pollAfterSeconds` before first poll, then exponential backoff
+        (5s → 10s → 20s → 30s max) until `status` is `completed` or `failed`.
+      tags: [Scans]
+      security:
+        - BearerAuth:
+            - scan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartScanRequest"
+            example:
+              companyId: "YOUR_COMPANY_DOCUMENT_ID"
+              skipSync: false
+              period:
+                startDate: "2024-01-01"
+                endDate: "2024-12-31"
+      responses:
+        "200":
+          description: Scan started
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/StartScanData"
+              example:
+                success: true
+                data:
+                  scanId: "65f1a2b3c4d5e6f7a8b9c0d1"
+                  status: "started"
+                  pollAfterSeconds: 300
+                  pollUrl: "/tp/api/scan/65f1a2b3c4d5e6f7a8b9c0d1?companyId=YOUR_COMPANY_DOCUMENT_ID"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /tp/api/scan/{scanId}:
+    get:
+      operationId: getScan
+      summary: Get scan results
+      description: >
+        Returns one scan document including `results` when available.
+        Use path `history` for the history list.
+      tags: [Scans]
+      security:
+        - BearerAuth:
+            - scan
+      parameters:
+        - name: scanId
+          in: path
+          required: true
+          description: "scanId, or `history` for history list"
+          schema:
+            type: string
+        - name: companyId
+          in: query
+          required: true
+          description: "companyId (connection `_id` from `/tp/api/connections`)"
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: "Page size when scanId is `history`"
+          schema:
+            type: integer
+            default: 20
+        - name: skip
+          in: query
+          required: false
+          description: "Offset when scanId is `history`"
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Scan data
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          scan:
+                            $ref: "#/components/schemas/Scan"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /tp/api/scan/history:
+    get:
+      operationId: getScanHistory
+      summary: Get scan history
+      description: Lists recent scans for a company.
+      tags: [Scans]
+      security:
+        - BearerAuth:
+            - scan
+      parameters:
+        - name: companyId
+          in: query
+          required: true
+          description: companyId
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: Page size
+          schema:
+            type: integer
+            default: 20
+        - name: skip
+          in: query
+          required: false
+          description: Offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Scan history list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ScanHistoryData"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /tp/api/issues:
+    get:
+      operationId: listIssues
+      summary: List all issues
+      description: >
+        Returns issue categories with `id`, `name`, and `description`.
+        Each `id` is used as `issueId` in scan results keys and solve endpoints.
+      tags: [Issues]
+      security:
+        - BearerAuth:
+            - scan
+      responses:
+        "200":
+          description: Issue list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/IssuesData"
+              example:
+                success: true
+                data:
+                  issues:
+                    - id: "cheque-not-deposited"
+                      name: "Cheque Received but Not Deposited"
+                      description: "Identifies cheque payments posted to Undeposited Funds but not deposited."
+                    - id: "contractor-payment-not-flagged-for-1099"
+                      name: "Contractor Payment Not Flagged for 1099"
+                      description:
+                        - "First paragraph explaining the issue."
+                        - "Second paragraph with impact or remediation context."
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          description: Issues load failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /tp/api/solvers:
+    get:
+      operationId: listSolvers
+      summary: List all solvers
+      description: Returns all registered solvers with their input schemas.
+      tags: [Solvers]
+      security:
+        - BearerAuth:
+            - solve
+      responses:
+        "200":
+          description: Solver list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SolversData"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /tp/api/issues/{issueId}/solvers:
+    get:
+      operationId: getIssueSolvers
+      summary: Get solvers for a specific issue
+      description: Returns solvers applicable to the given issue.
+      tags: [Solvers]
+      security:
+        - BearerAuth:
+            - solve
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          description: "issueId from `GET /tp/api/issues`"
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Solvers for issue
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/IssueSolversData"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /tp/api/solve/prep:
+    post:
+      operationId: solvePrep
+      summary: Prepare solver data for a record
+      description: >
+        Returns everything needed to choose `solverId` and build `userInput`
+        for `POST /tp/api/solve/apply` for one scan row. Includes solvers,
+        row-level options, meta options, and risk flags.
+      tags: [Solvers]
+      security:
+        - BearerAuth:
+            - solve
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SolvePrepRequest"
+            example:
+              scanId: "65f1a2b3c4d5e6f7a8b9c0d1"
+              issueId: "inventory-purchases-booked-to-expense"
+              recordId: "3871"
+              companyId: "YOUR_COMPANY_DOCUMENT_ID"
+      responses:
+        "200":
+          description: Prep data for solving
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SolvePrepData"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /tp/api/solve/apply:
+    post:
+      operationId: solveApply
+      summary: Apply a solver to fix a record
+      description: >
+        Applies a solver to a specific record from a scan. If `data.needsInput`
+        is true, supply `userInput` and POST again with the same `scanId`,
+        `issueId`, `recordId`, `companyId`, and `solverId`.
+      tags: [Solvers]
+      security:
+        - BearerAuth:
+            - solve
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SolveApplyRequest"
+            example:
+              scanId: "65f1a2b3c4d5e6f7a8b9c0d1"
+              issueId: "inventory-purchases-booked-to-expense"
+              recordId: "3871"
+              solverId: "reclassify-expense-to-inventory"
+              companyId: "YOUR_COMPANY_DOCUMENT_ID"
+              userInput:
+                targetItemId: "235"
+                quantity: 1
+      responses:
+        "200":
+          description: Solver applied or needs input
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        oneOf:
+                          - $ref: "#/components/schemas/SolveApplySuccess"
+                          - $ref: "#/components/schemas/SolveApplyNeedsInput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          description: Fix limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /tp/api/scans/{scanId}/solves:
+    get:
+      operationId: getSolveHistory
+      summary: Get solve history for a scan
+      description: Returns recent solve attempts for a scan, newest first.
+      tags: [Solvers]
+      security:
+        - BearerAuth:
+            - solve
+      parameters:
+        - name: scanId
+          in: path
+          required: true
+          description: scanId
+          schema:
+            type: string
+        - name: companyId
+          in: query
+          required: true
+          description: companyId
+          schema:
+            type: string
+        - name: issueId
+          in: query
+          required: false
+          description: Filter solves by issueId
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Solve history
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SolveHistoryData"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /tp/api/billing:
+    get:
+      operationId: getBilling
+      summary: Get billing and usage info
+      description: Returns current plan, usage counters, and upgrade hints.
+      tags: [Billing]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Billing info
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/BillingData"
+              example:
+                success: true
+                data:
+                  plan:
+                    name: "All-Access Pass"
+                    limits:
+                      maxCompanies: 2
+                  usage:
+                    fixesUsed: 0
+                    fixesLimit: -1
+                    fixesRemaining: -1
+                    canRunScan: true
+                  upgrade:
+                    available: false
+                    nextPlan: null
+                    message: null
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          description: Billing subsystem not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /tp/api/connections:
+    get:
+      operationId: listConnections
+      summary: List QuickBooks connections
+      description: >
+        Lists QuickBooks companies linked to the API key user.
+        Use each `_id` as `companyId` in scan and solve calls.
+      tags: [Connections]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Connection list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ConnectionsData"
+              example:
+                success: true
+                data:
+                  connections:
+                    - _id: "69b2df85dc1974c5e28656ae"
+                      externalId: "9341455852565781"
+                      accountingSystem: "qbo"
+                      companyName: "Example Co."
+                      isSandbox: true
+                      status: "active"
+                      syncStatus: "ready"
+                      syncLocked: false
+                      syncUpdatedAt: "2026-03-31T06:31:25.689Z"
+                      syncError: null
+                      createdAt: "2026-03-12T15:45:09.699Z"
+                      lastAccessedAt: "2026-03-26T08:41:58.959Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /tp/api/connect:
+    get:
+      operationId: getConnectUrl
+      summary: Get QuickBooks OAuth connect URL
+      description: >
+        Returns a browser URL to start QuickBooks OAuth.
+        User must be logged into CleanupOwl in that browser session.
+      tags: [Connections]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Connect URL
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ConnectData"
+              example:
+                success: true
+                data:
+                  connectionUrl: "https://app.cleanupowl.com/auth/qbo/init?returnTo=/v2/scans"
+                  instructions: "Open this URL in your browser to connect your QuickBooks company. You must be logged in to CleanupOwl."
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: >
+        API key as `Authorization: Bearer <key>`. Scopes: `scan` (Issues, Scans),
+        `solve` (Solvers), none (Billing, Connections).
+
+  responses:
+    BadRequest:
+      description: Missing or invalid parameters
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            missing_company_id:
+              value:
+                success: false
+                error:
+                  code: "E_MISSING_COMPANY_ID"
+                  message: "Missing companyId"
+            missing_params:
+              value:
+                success: false
+                error:
+                  code: "E_MISSING_PARAMS"
+                  message: "Missing required parameters: scanId, issueId, recordId"
+            solver_issue_mismatch:
+              value:
+                success: false
+                error:
+                  code: "E_SOLVER_ISSUE_MISMATCH"
+                  message: "Solver not valid for this issue"
+
+    Unauthorized:
+      description: Authentication error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            missing_key:
+              value:
+                success: false
+                error:
+                  code: "E_MISSING_API_KEY"
+                  message: "No Authorization: Bearer header"
+            invalid_key:
+              value:
+                success: false
+                error:
+                  code: "E_INVALID_API_KEY"
+                  message: "Invalid API key format"
+            revoked_key:
+              value:
+                success: false
+                error:
+                  code: "E_API_KEY_REVOKED"
+                  message: "API key has been revoked"
+            expired_key:
+              value:
+                success: false
+                error:
+                  code: "E_API_KEY_EXPIRED"
+                  message: "API key has expired"
+            qbo_auth_failed:
+              value:
+                success: false
+                error:
+                  code: "E_QBO_AUTH_FAILED"
+                  message: "QuickBooks connection invalid"
+
+    Forbidden:
+      description: Access denied
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            scope_forbidden:
+              value:
+                success: false
+                error:
+                  code: "E_SCOPE_FORBIDDEN"
+                  message: "API key missing required scope"
+            company_access_denied:
+              value:
+                success: false
+                error:
+                  code: "E_COMPANY_ACCESS_DENIED"
+                  message: "No access to this company"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            scan_not_found:
+              value:
+                success: false
+                error:
+                  code: "E_SCAN_NOT_FOUND"
+                  message: "Scan not found"
+            record_not_found:
+              value:
+                success: false
+                error:
+                  code: "E_RECORD_NOT_FOUND"
+                  message: "Record not found in scan results"
+            detector_not_found:
+              value:
+                success: false
+                error:
+                  code: "E_DETECTOR_NOT_FOUND"
+                  message: "No results bucket for this issueId on the scan"
+
+  schemas:
+    SuccessEnvelope:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+
+    ErrorEnvelope:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+    StartScanRequest:
+      type: object
+      required: [companyId]
+      properties:
+        companyId:
+          type: string
+          description: "companyId (connection `_id` from `GET /tp/api/connections`)"
+        skipSync:
+          type: boolean
+          default: false
+        period:
+          type: object
+          properties:
+            startDate:
+              type: string
+              format: date
+              example: "2024-01-01"
+            endDate:
+              type: string
+              format: date
+              example: "2024-12-31"
+        reportYear:
+          type: integer
+        materialityThreshold:
+          type: number
+        skip:
+          type: array
+          items:
+            type: string
+          description: issueIds to skip
+        only:
+          type: array
+          items:
+            type: string
+          description: only run these issueIds
+        overrides:
+          type: object
+        syncPeriod:
+          type: object
+
+    StartScanData:
+      type: object
+      required: [scanId, status, pollAfterSeconds]
+      properties:
+        scanId:
+          type: string
+        status:
+          type: string
+          example: "started"
+        pollAfterSeconds:
+          type: integer
+          example: 300
+        pollUrl:
+          type: string
+
+    Scan:
+      type: object
+      required: [_id, companyId, status]
+      properties:
+        _id:
+          type: string
+        companyId:
+          type: string
+        externalId:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          description: "e.g. `pending`, `running`, `completed`, `failed`"
+        issueIds:
+          type: array
+          items:
+            type: string
+        totalResults:
+          type: integer
+        severity:
+          $ref: "#/components/schemas/SeverityCounts"
+        executionTimeMs:
+          type: integer
+          nullable: true
+        error:
+          nullable: true
+        isLatest:
+          type: boolean
+        results:
+          type: object
+          description: "Map of issueId → per-issue result"
+          additionalProperties:
+            $ref: "#/components/schemas/IssueResult"
+
+    SeverityCounts:
+      type: object
+      properties:
+        high:
+          type: integer
+        medium:
+          type: integer
+        low:
+          type: integer
+
+    IssueResult:
+      type: object
+      properties:
+        category:
+          type: string
+          nullable: true
+        label:
+          type: string
+        description:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+          nullable: true
+        message:
+          type: string
+          nullable: true
+        count:
+          type: integer
+        severity:
+          $ref: "#/components/schemas/SeverityCounts"
+        params:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+        executionTimeMs:
+          type: integer
+          nullable: true
+        records:
+          type: array
+          description: "List-shaped rows. Use `Id`, `entityId`, or `id` as recordId."
+          items:
+            $ref: "#/components/schemas/ScanRecord"
+        table:
+          type: object
+          nullable: true
+          properties:
+            columns:
+              type: array
+              items:
+                $ref: "#/components/schemas/TableColumn"
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/TableRow"
+
+    ScanRecord:
+      type: object
+      description: >
+        A flagged record. Use any of `Id`, `_id`, `entityId`, or `id` as `recordId`
+        in solve endpoints.
+      properties:
+        Id:
+          type: string
+        _id:
+          type: string
+        entityId:
+          type: string
+        id:
+          type: string
+
+    TableColumn:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        format:
+          type: string
+          nullable: true
+        width:
+          type: string
+          nullable: true
+
+    TableRow:
+      type: object
+      properties:
+        _id:
+          type: string
+        _entity:
+          type: string
+          nullable: true
+        entityId:
+          type: string
+        entityType:
+          type: string
+        fixOptions:
+          type: object
+          nullable: true
+
+    ScanHistoryData:
+      type: object
+      required: [scans, latestScanId]
+      properties:
+        scans:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScanSummary"
+        latestScanId:
+          type: string
+
+    ScanSummary:
+      type: object
+      required: [_id, startedAt, status]
+      properties:
+        _id:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+        issueIds:
+          type: array
+          items:
+            type: string
+        totalResults:
+          type: integer
+        severity:
+          $ref: "#/components/schemas/SeverityCounts"
+        executionTimeMs:
+          type: integer
+          nullable: true
+        error:
+          nullable: true
+        isLatest:
+          type: boolean
+
+    IssuesData:
+      type: object
+      required: [issues]
+      properties:
+        issues:
+          type: array
+          items:
+            $ref: "#/components/schemas/Issue"
+
+    Issue:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          description: "Used as issueId in solve endpoints and scan results keys"
+        name:
+          type: string
+        description:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+          nullable: true
+
+    SolversData:
+      type: object
+      required: [solvers]
+      properties:
+        solvers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Solver"
+
+    IssueSolversData:
+      type: object
+      required: [solvers, hasSolvers]
+      properties:
+        solvers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Solver"
+        hasSolvers:
+          type: boolean
+
+    Solver:
+      type: object
+      required: [id, name, forIssue, requiresInput]
+      properties:
+        id:
+          type: string
+          description: "Pass as solverId on apply"
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        forIssue:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+          description: "issueId(s) this solver applies to, or `*` for universal"
+        requiresInput:
+          type: boolean
+        userInputSchema:
+          type: object
+          nullable: true
+          additionalProperties:
+            $ref: "#/components/schemas/UserInputField"
+
+    UserInputField:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [select, text, number, hidden]
+        label:
+          type: string
+        required:
+          type: boolean
+          nullable: true
+        optionsFrom:
+          type: string
+          nullable: true
+          description: "Dot-path on scan record to load options from"
+
+    SolvePrepRequest:
+      type: object
+      required: [scanId, issueId, recordId, companyId]
+      properties:
+        scanId:
+          type: string
+        issueId:
+          type: string
+        recordId:
+          type: string
+          description: "Any of `Id`, `_id`, `entityId`, or `id` from the scan row"
+        companyId:
+          type: string
+
+    SolvePrepData:
+      type: object
+      required: [issueId, scanId, hasSolvers]
+      properties:
+        issueId:
+          type: string
+        scanId:
+          type: string
+        hasSolvers:
+          type: boolean
+        message:
+          type: string
+          nullable: true
+        solvers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Solver"
+        recordFixOptions:
+          type: object
+          nullable: true
+        metaFixOptions:
+          type: object
+          nullable: true
+        hasLinkedTransactions:
+          type: boolean
+        linkedTransactions:
+          type: array
+          items:
+            type: object
+            properties:
+              txnType:
+                type: string
+              txnId:
+                type: string
+        resolvedByOtherFix:
+          type: boolean
+        resolvedBy:
+          type: object
+          nullable: true
+        needsRevalidation:
+          type: boolean
+        modifiedBy:
+          type: object
+          nullable: true
+        entityConflicts:
+          type: object
+          nullable: true
+
+    SolveApplyRequest:
+      type: object
+      required: [scanId, issueId, recordId, companyId]
+      properties:
+        scanId:
+          type: string
+        issueId:
+          type: string
+        recordId:
+          type: string
+        companyId:
+          type: string
+        solverId:
+          type: string
+          description: "Solver to run; default applies if omitted"
+        userInput:
+          type: object
+          nullable: true
+        externalId:
+          type: string
+          nullable: true
+
+    SolveApplySuccess:
+      type: object
+      required: [action, success]
+      properties:
+        solverId:
+          type: string
+        solverName:
+          type: string
+        issueId:
+          type: string
+        action:
+          type: string
+          description: "`deleted`, `updated`, or `skip`"
+        message:
+          type: string
+        success:
+          type: boolean
+
+    SolveApplyNeedsInput:
+      type: object
+      description: "Solver needs additional input. Supply `userInput` and POST apply again."
+      required: [needsInput]
+      properties:
+        needsInput:
+          type: boolean
+          enum: [true]
+        missingFields:
+          type: array
+          items:
+            type: string
+        userInputSchema:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/UserInputField"
+
+    SolveHistoryData:
+      type: object
+      required: [solves]
+      properties:
+        solves:
+          type: array
+          items:
+            $ref: "#/components/schemas/SolveEntry"
+
+    SolveEntry:
+      type: object
+      required: [_id, scanId, recordId, issueId, action, success, executedAt]
+      properties:
+        _id:
+          type: string
+        scanId:
+          type: string
+        recordId:
+          type: string
+        issueId:
+          type: string
+        solverId:
+          type: string
+          nullable: true
+        solverName:
+          type: string
+          nullable: true
+        action:
+          type: string
+        success:
+          type: boolean
+        executedAt:
+          type: string
+          format: date-time
+        entity:
+          type: object
+          nullable: true
+          properties:
+            entityType:
+              type: string
+            entityId:
+              type: string
+
+    BillingData:
+      type: object
+      required: [plan, usage, upgrade]
+      properties:
+        plan:
+          type: object
+          properties:
+            name:
+              type: string
+            limits:
+              type: object
+              additionalProperties:
+                type: integer
+        usage:
+          type: object
+          properties:
+            fixesUsed:
+              type: integer
+            fixesLimit:
+              type: integer
+              description: "-1 for unlimited"
+            fixesRemaining:
+              type: integer
+              description: "-1 if unlimited"
+            canRunScan:
+              type: boolean
+        upgrade:
+          type: object
+          properties:
+            available:
+              type: boolean
+            nextPlan:
+              type: object
+              nullable: true
+              properties:
+                id:
+                  type: string
+                name:
+                  type: string
+            message:
+              type: string
+              nullable: true
+
+    ConnectionsData:
+      type: object
+      required: [connections]
+      properties:
+        connections:
+          type: array
+          items:
+            $ref: "#/components/schemas/Connection"
+
+    Connection:
+      type: object
+      required: [_id, companyName, accountingSystem, status]
+      properties:
+        _id:
+          type: string
+          description: "Use as companyId"
+        externalId:
+          type: string
+        companyName:
+          type: string
+        accountingSystem:
+          type: string
+        isSandbox:
+          type: boolean
+        status:
+          type: string
+        syncStatus:
+          type: string
+        syncLocked:
+          type: boolean
+        syncUpdatedAt:
+          type: string
+          format: date-time
+        syncError:
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        lastAccessedAt:
+          type: string
+          format: date-time
+
+    ConnectData:
+      type: object
+      required: [connectionUrl, instructions]
+      properties:
+        connectionUrl:
+          type: string
+        instructions:
+          type: string

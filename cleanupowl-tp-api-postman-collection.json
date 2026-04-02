@@ -1,0 +1,386 @@
+{
+    "info": {
+        "name": "CleanupOwl Third-Party API (Beta)",
+        "description": "BETA — Collection of API endpoints for integrating with CleanupOwl's detection and fixing engine. Breaking changes may occur without a version bump; see release notes.\n\nSee app/backend/src/platform/external-api/THIRD_PARTY_API_DOCS.md.",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "1. Scans",
+            "item": [
+                {
+                    "name": "Start Scan",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"companyId\": \"{{companyId}}\",\n  \"skipSync\": false,\n  \"period\": {\n    \"startDate\": \"2024-01-01\",\n    \"endDate\": \"2024-12-31\"\n  }\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/tp/api/scan/start",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "tp",
+                                "api",
+                                "scan",
+                                "start"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Scan Results",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/tp/api/scan/{{scanId}}?companyId={{companyId}}",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "tp",
+                                "api",
+                                "scan",
+                                "{{scanId}}"
+                            ],
+                            "query": [
+                                {
+                                    "key": "companyId",
+                                    "value": "{{companyId}}"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Scan History",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/tp/api/scan/history?companyId={{companyId}}&limit=20",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "tp",
+                                "api",
+                                "scan",
+                                "history"
+                            ],
+                            "query": [
+                                {
+                                    "key": "companyId",
+                                    "value": "{{companyId}}"
+                                },
+                                {
+                                    "key": "limit",
+                                    "value": "20"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "2. Issues",
+            "item": [
+                {
+                    "name": "List Issues",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/tp/api/issues",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "tp",
+                                "api",
+                                "issues"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "3. Solvers",
+            "item": [
+                {
+                    "name": "List All Solvers",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/tp/api/solvers",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "tp",
+                                "api",
+                                "solvers"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Solvers for Issue",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/tp/api/issues/{{issueId}}/solvers",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "tp",
+                                "api",
+                                "issues",
+                                "{{issueId}}",
+                                "solvers"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Solve Prep",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"scanId\": \"{{scanId}}\",\n  \"companyId\": \"{{companyId}}\",\n  \"issueId\": \"{{issueId}}\",\n  \"recordId\": \"{{recordId}}\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/tp/api/solve/prep",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "tp",
+                                "api",
+                                "solve",
+                                "prep"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Apply Solve",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"scanId\": \"{{scanId}}\",\n  \"companyId\": \"{{companyId}}\",\n  \"issueId\": \"{{issueId}}\",\n  \"recordId\": \"{{recordId}}\",\n  \"solverId\": \"{{solverId}}\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/tp/api/solve/apply",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "tp",
+                                "api",
+                                "solve",
+                                "apply"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Solve History",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/tp/api/scans/{{scanId}}/solves?companyId={{companyId}}",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "tp",
+                                "api",
+                                "scans",
+                                "{{scanId}}",
+                                "solves"
+                            ],
+                            "query": [
+                                {
+                                    "key": "companyId",
+                                    "value": "{{companyId}}"
+                                },
+                                {
+                                    "key": "issueId",
+                                    "value": "{{issueId}}",
+                                    "disabled": true,
+                                    "description": "Optional: filter solves by issue ID"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "4. Billing",
+            "item": [
+                {
+                    "name": "Get Billing Info",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/tp/api/billing",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "tp",
+                                "api",
+                                "billing"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "5. Connections",
+            "item": [
+                {
+                    "name": "List Connections",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/tp/api/connections",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "tp",
+                                "api",
+                                "connections"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Connect URL",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/tp/api/connect",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "tp",
+                                "api",
+                                "connect"
+                            ]
+                        }
+                    }
+                }
+            ]
+        }
+    ],
+    "auth": {
+        "type": "bearer",
+        "bearer": [
+            {
+                "key": "token",
+                "value": "{{apiToken}}",
+                "type": "string"
+            }
+        ]
+    },
+    "event": [
+        {
+            "listen": "prerequest",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    ""
+                ]
+            }
+        },
+        {
+            "listen": "test",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    ""
+                ]
+            }
+        }
+    ],
+    "variable": [
+        {
+            "key": "baseUrl",
+            "value": "http://localhost:3000",
+            "type": "string"
+        },
+        {
+            "key": "apiToken",
+            "value": "YOUR_API_TOKEN_HERE",
+            "type": "string"
+        },
+        {
+            "key": "companyId",
+            "value": "YOUR_COMPANY_ID_HERE",
+            "type": "string"
+        },
+        {
+            "key": "scanId",
+            "value": "YOUR_SCAN_ID_HERE",
+            "type": "string"
+        },
+        {
+            "key": "issueId",
+            "value": "YOUR_ISSUE_ID_HERE",
+            "type": "string"
+        },
+        {
+            "key": "recordId",
+            "value": "YOUR_RECORD_ID_HERE",
+            "type": "string"
+        },
+        {
+            "key": "solverId",
+            "value": "YOUR_SOLVER_ID_HERE",
+            "type": "string"
+        },
+        {
+            "key": "txnId",
+            "value": "YOUR_TXN_ID_FROM_PENDING_FIXES",
+            "type": "string"
+        }
+    ]
+}
